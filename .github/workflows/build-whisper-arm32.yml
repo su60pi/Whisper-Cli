@@ -1,0 +1,51 @@
+name: Build Static Whisper-CLI (Android 32-bit ARMv7)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-arm32:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout whisper.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggerganov/whisper.cpp
+          ref: master
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Configure CMake (Static Single-File ARMv7)
+        run: |
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=armeabi-v7a \
+            -DANDROID_PLATFORM=android-21 \
+            -DANDROID_STL=c++_static \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_SDL2=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -Wl,--gc-sections"
+
+      - name: Compile whisper-cli
+        run: cmake --build build --target whisper-cli -j$(nproc)
+
+      - name: Strip Debug Symbols (Shrink Binary Size)
+        run: $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip build/bin/whisper-cli
+
+      - name: Verify Binary Architecture
+        run: file build/bin/whisper-cli
+
+      - name: Upload Standalone Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-cli-android-armv7
+          path: build/bin/whisper-cli
+          
